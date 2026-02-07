@@ -35,7 +35,7 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
     ],
   })
 
-  client.on('ready', () => {
+  client.on('clientReady', () => {
     console.log(`Logged in as ${client.user?.tag}`)
   })
 
@@ -133,7 +133,7 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
       const err = error as Error
 
       // Handle session resume failure
-      if (isSessionError(err)) {
+      if (isSessionError(err, sessionId !== null)) {
         sessions.clear(message.channelId)
         await message.reply(
           'Session expired or corrupted. Starting fresh — please resend your message.'
@@ -160,12 +160,23 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
   return client
 }
 
-function isSessionError(error: Error): boolean {
+function isSessionError(error: Error, hadSession: boolean): boolean {
   const msg = error.message.toLowerCase()
-  return (
+
+  // Explicit session-related errors
+  if (
     msg.includes('session') ||
     msg.includes('resume') ||
     msg.includes('not found') ||
     msg.includes('expired')
-  )
+  ) {
+    return true
+  }
+
+  // Process crash while resuming a session — likely a stale/corrupt session
+  if (hadSession && msg.includes('exited with code')) {
+    return true
+  }
+
+  return false
 }
