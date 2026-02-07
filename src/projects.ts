@@ -40,9 +40,12 @@ export class ProjectRegistry {
     const entries = fs.readdirSync(this.projectsRoot, { withFileTypes: true })
 
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
 
-      const projectPath = path.join(this.projectsRoot, entry.name)
+      const projectPath = fs.realpathSync(path.join(this.projectsRoot, entry.name))
+
+      // Symlink must resolve to a directory
+      if (!fs.statSync(projectPath).isDirectory()) continue
       const discordJsonPath = path.join(projectPath, 'discord.json')
 
       if (!fs.existsSync(discordJsonPath)) continue
