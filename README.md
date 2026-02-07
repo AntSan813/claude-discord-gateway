@@ -1,22 +1,32 @@
 # Claude Discord Gateway
 
-A Node.js application that bridges Discord to Claude Code via the [Claude Agent SDK](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk). Each Discord channel maps 1:1 to a project folder on your machine, giving you full Claude Code capabilities through Discord.
+**Chat with Claude Code through Discord. One channel = one project. That's it.**
 
-## Features
+```
+Discord #finance channel  →  ~/projects/finance/
+Discord #portfolio channel  →  ~/projects/portfolio/
+```
 
-- **Full Claude Code parity** — anything you can do in the CLI, you can do via Discord
-- **Project isolation** — each channel has its own working directory, CLAUDE.md, and settings
-- **Session persistence** — conversations survive bot restarts (SQLite-backed)
-- **Permission buttons** — approve/deny tool usage directly in Discord
-- **File attachments** — upload images, PDFs, or files for Claude to analyze
-- **Slash commands** — `/new`, `/status`, `/projects`, `/model`, `/rescan`
+No complex setup. No unnecessary features. Just add a `discord.json` to any folder and start chatting.
 
-## Real-World Use Cases
+## Why This Exists
 
-- **Investment Assistant** — dedicated channel for market research, portfolio analysis, with persistent memory via CLAUDE.md
-- **DevOps Bot** — channel linked to your infrastructure repo for deployments and monitoring
-- **Research Agent** — channel with MCP servers for database access, web scraping, etc.
-- **Personal Assistant** — general-purpose channel for tasks, reminders, file management
+Claude Code is powerful but lives in your terminal. This gateway lets you talk to it from Discord — from your phone, your desktop, anywhere. Each channel is its own isolated workspace with persistent memory.
+
+## What You Get
+
+- Full Claude Code capabilities (file editing, bash, web search, MCP servers)
+- Conversations persist across restarts
+- Approve/deny tool usage with Discord buttons
+- Upload files directly in chat
+- Works with your existing `CLAUDE.md` and `.claude/settings.json`
+
+## Use Cases
+
+- **Investment Assistant** — market research with persistent memory
+- **DevOps Bot** — deployments from your phone
+- **Research Agent** — database access via MCP servers
+- **Personal Assistant** — tasks and file management
 
 ## Prerequisites
 
