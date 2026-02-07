@@ -1,0 +1,21 @@
+{
+  "name": "discord-claude-bridge",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "latest",
+    "discord.js": "^14",
+    "better-sqlite3": "^11",
+    "dotenv": "^16"
+  },
+  "devDependencies": {
+    "typescript": "^5.5",
+    "@types/node": "^22",
+    "@types/better-sqlite3": "^7",
+    "tsx": "^4"
+  }
+}
