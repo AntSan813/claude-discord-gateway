@@ -1,12 +1,12 @@
-import fs from 'node:fs'
-import path from 'node:path'
+import fs from "node:fs"
+import path from "node:path"
 
 export interface ProjectConfig {
   name: string
   path: string
   channelId: string
   model?: string
-  permissionMode: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
+  permissionMode: "default" | "acceptEdits" | "bypassPermissions" | "plan"
   maxBudgetUsd?: number
   allowedTools?: string[]
   disallowedTools?: string[]
@@ -42,16 +42,18 @@ export class ProjectRegistry {
     for (const entry of entries) {
       if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
 
-      const projectPath = fs.realpathSync(path.join(this.projectsRoot, entry.name))
+      const projectPath = fs.realpathSync(
+        path.join(this.projectsRoot, entry.name)
+      )
 
       // Symlink must resolve to a directory
       if (!fs.statSync(projectPath).isDirectory()) continue
-      const discordJsonPath = path.join(projectPath, 'discord.json')
+      const discordJsonPath = path.join(projectPath, "discord.json")
 
       if (!fs.existsSync(discordJsonPath)) continue
 
       try {
-        const raw = fs.readFileSync(discordJsonPath, 'utf-8')
+        const raw = fs.readFileSync(discordJsonPath, "utf-8")
         const config: DiscordJson = JSON.parse(raw)
 
         if (!config.channelId) {
@@ -60,7 +62,9 @@ export class ProjectRegistry {
         }
 
         if (this.channelMap.has(config.channelId)) {
-          console.error(`Duplicate channelId ${config.channelId} in ${entry.name}, skipping`)
+          console.error(
+            `Duplicate channelId ${config.channelId} in ${entry.name}, skipping`
+          )
           continue
         }
 
@@ -69,14 +73,18 @@ export class ProjectRegistry {
           path: projectPath,
           channelId: config.channelId,
           model: config.model,
-          permissionMode: (config.permissionMode as ProjectConfig['permissionMode']) || 'default',
+          permissionMode:
+            (config.permissionMode as ProjectConfig["permissionMode"]) ||
+            "default",
           maxBudgetUsd: config.maxBudgetUsd,
           allowedTools: config.allowedTools ?? undefined,
           disallowedTools: config.disallowedTools ?? undefined,
         }
 
         this.channelMap.set(config.channelId, project)
-        console.log(`Registered project: ${entry.name} → channel ${config.channelId}`)
+        console.log(
+          `Registered project: ${entry.name} → channel ${config.channelId}`
+        )
       } catch (err) {
         console.error(`Failed to parse ${discordJsonPath}:`, err)
       }

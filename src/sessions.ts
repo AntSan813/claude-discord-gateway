@@ -1,6 +1,6 @@
-import Database from 'better-sqlite3'
-import fs from 'node:fs'
-import path from 'node:path'
+import Database from "better-sqlite3"
+import fs from "node:fs"
+import path from "node:path"
 
 export interface SessionRecord {
   channelId: string
@@ -35,7 +35,7 @@ export class SessionStore {
 
   get(channelId: string): string | null {
     const row = this.db
-      .prepare('SELECT session_id FROM sessions WHERE channel_id = ?')
+      .prepare("SELECT session_id FROM sessions WHERE channel_id = ?")
       .get(channelId) as { session_id: string } | undefined
 
     return row?.session_id ?? null
@@ -43,32 +43,36 @@ export class SessionStore {
 
   set(channelId: string, sessionId: string, projectName: string): void {
     this.db
-      .prepare(`
+      .prepare(
+        `
         INSERT INTO sessions (channel_id, session_id, project_name, updated_at)
         VALUES (?, ?, ?, datetime('now'))
         ON CONFLICT(channel_id) DO UPDATE SET
           session_id = excluded.session_id,
           project_name = excluded.project_name,
           updated_at = datetime('now')
-      `)
+      `
+      )
       .run(channelId, sessionId, projectName)
   }
 
   clear(channelId: string): void {
-    this.db.prepare('DELETE FROM sessions WHERE channel_id = ?').run(channelId)
+    this.db.prepare("DELETE FROM sessions WHERE channel_id = ?").run(channelId)
   }
 
   getAll(): SessionRecord[] {
     const rows = this.db
-      .prepare('SELECT channel_id, session_id, project_name, updated_at FROM sessions')
+      .prepare(
+        "SELECT channel_id, session_id, project_name, updated_at FROM sessions"
+      )
       .all() as Array<{
-        channel_id: string
-        session_id: string
-        project_name: string
-        updated_at: string
-      }>
+      channel_id: string
+      session_id: string
+      project_name: string
+      updated_at: string
+    }>
 
-    return rows.map((row) => ({
+    return rows.map(row => ({
       channelId: row.channel_id,
       sessionId: row.session_id,
       projectName: row.project_name,

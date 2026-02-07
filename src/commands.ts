@@ -3,9 +3,9 @@ import {
   type ChatInputCommandInteraction,
   REST,
   Routes,
-} from 'discord.js'
-import type { ProjectRegistry } from './projects.js'
-import type { SessionStore } from './sessions.js'
+} from "discord.js"
+import type { ProjectRegistry } from "./projects.js"
+import type { SessionStore } from "./sessions.js"
 
 // Runtime model overrides (not persisted)
 const modelOverrides = new Map<string, string>()
@@ -16,37 +16,37 @@ export function getModelOverride(channelId: string): string | undefined {
 
 const commands = [
   new SlashCommandBuilder()
-    .setName('new')
-    .setDescription('Start a fresh Claude conversation'),
+    .setName("new")
+    .setDescription("Start a fresh Claude conversation"),
 
   new SlashCommandBuilder()
-    .setName('status')
-    .setDescription('Show project and session info'),
+    .setName("status")
+    .setDescription("Show project and session info"),
 
   new SlashCommandBuilder()
-    .setName('cost')
-    .setDescription('Show session cost (from last response)'),
+    .setName("cost")
+    .setDescription("Show session cost (from last response)"),
 
   new SlashCommandBuilder()
-    .setName('projects')
-    .setDescription('List all registered projects'),
+    .setName("projects")
+    .setDescription("List all registered projects"),
 
   new SlashCommandBuilder()
-    .setName('rescan')
-    .setDescription('Re-scan project folders'),
+    .setName("rescan")
+    .setDescription("Re-scan project folders"),
 
   new SlashCommandBuilder()
-    .setName('model')
-    .setDescription('Switch Claude model for this channel')
-    .addStringOption((opt) =>
+    .setName("model")
+    .setDescription("Switch Claude model for this channel")
+    .addStringOption(opt =>
       opt
-        .setName('name')
-        .setDescription('Model to use')
+        .setName("name")
+        .setDescription("Model to use")
         .setRequired(true)
         .addChoices(
-          { name: 'Sonnet', value: 'claude-sonnet-4-5-20250929' },
-          { name: 'Opus', value: 'claude-opus-4-6' },
-          { name: 'Haiku', value: 'claude-haiku-4-5-20251001' }
+          { name: "Sonnet", value: "claude-sonnet-4-5-20250929" },
+          { name: "Opus", value: "claude-opus-4-6" },
+          { name: "Haiku", value: "claude-haiku-4-5-20251001" }
         )
     ),
 ]
@@ -57,13 +57,13 @@ export async function registerCommands(
 ): Promise<void> {
   const rest = new REST().setToken(token)
 
-  console.log('Registering slash commands...')
+  console.log("Registering slash commands...")
 
   await rest.put(Routes.applicationCommands(applicationId), {
-    body: commands.map((c) => c.toJSON()),
+    body: commands.map(c => c.toJSON()),
   })
 
-  console.log('Slash commands registered.')
+  console.log("Slash commands registered.")
 }
 
 interface CommandContext {
@@ -79,16 +79,16 @@ export async function handleCommand(
   const { commandName } = interaction
 
   switch (commandName) {
-    case 'new': {
+    case "new": {
       ctx.sessions.clear(interaction.channelId)
-      await interaction.reply('Session cleared. Next message starts fresh.')
+      await interaction.reply("Session cleared. Next message starts fresh.")
       break
     }
 
-    case 'status': {
+    case "status": {
       const project = ctx.projects.getByChannelId(interaction.channelId)
       if (!project) {
-        await interaction.reply('This channel is not linked to a project.')
+        await interaction.reply("This channel is not linked to a project.")
         return
       }
 
@@ -98,65 +98,69 @@ export async function handleCommand(
       const lines = [
         `**Project:** ${project.name}`,
         `**Path:** \`${project.path}\``,
-        `**Model:** ${modelOverride ?? project.model ?? 'default'}`,
+        `**Model:** ${modelOverride ?? project.model ?? "default"}`,
         `**Permission Mode:** ${project.permissionMode}`,
-        `**Session:** ${session ? `\`${session.slice(0, 8)}...\`` : 'none'}`,
+        `**Session:** ${session ? `\`${session.slice(0, 8)}...\`` : "none"}`,
       ]
 
-      await interaction.reply(lines.join('\n'))
+      await interaction.reply(lines.join("\n"))
       break
     }
 
-    case 'cost': {
+    case "cost": {
       const lastCost = ctx.lastCosts.get(interaction.channelId)
       if (!lastCost) {
-        await interaction.reply('No cost data available. Send a message first.')
+        await interaction.reply("No cost data available. Send a message first.")
         return
       }
 
       const costStr =
-        lastCost.cost < 0.01 ? '<$0.01' : `$${lastCost.cost.toFixed(3)}`
+        lastCost.cost < 0.01 ? "<$0.01" : `$${lastCost.cost.toFixed(3)}`
       await interaction.reply(
-        `Last query: ${costStr} · ${(lastCost.durationMs / 1000).toFixed(1)}s · ${lastCost.numTurns} turns`
+        `Last query: ${costStr} · ${(lastCost.durationMs / 1000).toFixed(
+          1
+        )}s · ${lastCost.numTurns} turns`
       )
       break
     }
 
-    case 'projects': {
+    case "projects": {
       const all = ctx.projects.getAll()
       if (all.length === 0) {
-        await interaction.reply('No projects registered.')
+        await interaction.reply("No projects registered.")
         return
       }
 
-      const lines = all.map(
-        (p) => `**${p.name}** → <#${p.channelId}>`
-      )
-      await interaction.reply(lines.join('\n'))
+      const lines = all.map(p => `**${p.name}** → <#${p.channelId}>`)
+      await interaction.reply(lines.join("\n"))
       break
     }
 
-    case 'rescan': {
+    case "rescan": {
       ctx.projects.discover()
-      await interaction.reply(`Rescanned. ${ctx.projects.count()} projects found.`)
+      await interaction.reply(
+        `Rescanned. ${ctx.projects.count()} projects found.`
+      )
       break
     }
 
-    case 'model': {
-      const model = interaction.options.getString('name', true)
+    case "model": {
+      const model = interaction.options.getString("name", true)
       modelOverrides.set(interaction.channelId, model)
 
-      const displayName = model.includes('sonnet')
-        ? 'Sonnet'
-        : model.includes('opus')
-          ? 'Opus'
-          : 'Haiku'
+      const displayName = model.includes("sonnet")
+        ? "Sonnet"
+        : model.includes("opus")
+        ? "Opus"
+        : "Haiku"
 
-      await interaction.reply(`Model switched to **${displayName}** for this channel.`)
+      await interaction.reply(
+        `Model switched to **${displayName}** for this channel.`
+      )
       break
     }
 
     default:
-      await interaction.reply('Unknown command.')
+      await interaction.reply("Unknown command.")
   }
 }

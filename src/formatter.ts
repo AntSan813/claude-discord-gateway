@@ -1,6 +1,9 @@
 const MAX_MESSAGE_LENGTH = 1900
 
-export function chunkResponse(text: string, maxLen = MAX_MESSAGE_LENGTH): string[] {
+export function chunkResponse(
+  text: string,
+  maxLen = MAX_MESSAGE_LENGTH
+): string[] {
   const chunks: string[] = []
   let remaining = text
 
@@ -15,7 +18,7 @@ export function chunkResponse(text: string, maxLen = MAX_MESSAGE_LENGTH): string
 
     // Fallback: split at last newline before maxLen
     if (splitIndex === -1) {
-      splitIndex = remaining.lastIndexOf('\n', maxLen)
+      splitIndex = remaining.lastIndexOf("\n", maxLen)
     }
 
     // Fallback: hard split at maxLen
@@ -37,7 +40,7 @@ function findCodeBlockBoundary(text: string, maxLen: number): number {
   let pos = 0
 
   while (pos < maxLen) {
-    const idx = text.indexOf('```', pos)
+    const idx = text.indexOf("```", pos)
     if (idx === -1 || idx >= maxLen) break
     lastClose = idx + 3
     pos = idx + 3
@@ -54,14 +57,14 @@ function findCodeBlockBoundary(text: string, maxLen: number): number {
 function fixCodeBlockContinuity(chunks: string[]): string[] {
   const result: string[] = []
   let inCodeBlock = false
-  let currentLang = ''
+  let currentLang = ""
 
   for (let i = 0; i < chunks.length; i++) {
     let chunk = chunks[i]
 
     // If we're continuing a code block from previous chunk
     if (inCodeBlock && i > 0) {
-      chunk = '```' + currentLang + '\n' + chunk
+      chunk = "```" + currentLang + "\n" + chunk
     }
 
     // Track if we end in a code block
@@ -70,26 +73,26 @@ function fixCodeBlockContinuity(chunks: string[]): string[] {
     let pos = 0
 
     while (pos < chunk.length) {
-      const idx = chunk.indexOf('```', pos)
+      const idx = chunk.indexOf("```", pos)
       if (idx === -1) break
 
       if (!tempInBlock) {
         // Opening a code block - capture language
         const afterMarker = chunk.slice(idx + 3)
         const langMatch = afterMarker.match(/^(\w*)/)
-        tempLang = langMatch ? langMatch[1] : ''
+        tempLang = langMatch ? langMatch[1] : ""
         tempInBlock = true
       } else {
         // Closing a code block
         tempInBlock = false
-        tempLang = ''
+        tempLang = ""
       }
       pos = idx + 3
     }
 
     // If chunk ends inside a code block, close it
     if (tempInBlock) {
-      chunk = chunk + '\n```'
+      chunk = chunk + "\n```"
     }
 
     result.push(chunk)
@@ -102,13 +105,19 @@ function fixCodeBlockContinuity(chunks: string[]): string[] {
   return result
 }
 
-export function formatCost(cost: number, durationMs: number, numTurns: number): string {
-  const costStr = cost < 0.01 ? '<$0.01' : `$${cost.toFixed(3)}`
+export function formatCost(
+  cost: number,
+  durationMs: number,
+  numTurns: number
+): string {
+  const costStr = cost < 0.01 ? "<$0.01" : `$${cost.toFixed(3)}`
   const durationStr = (durationMs / 1000).toFixed(1)
-  return `-# ${costStr} · ${durationStr}s · ${numTurns} turn${numTurns !== 1 ? 's' : ''}`
+  return `-# ${costStr} · ${durationStr}s · ${numTurns} turn${
+    numTurns !== 1 ? "s" : ""
+  }`
 }
 
 export function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text
-  return text.slice(0, maxLen - 3) + '...'
+  return text.slice(0, maxLen - 3) + "..."
 }
