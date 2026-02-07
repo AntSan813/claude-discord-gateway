@@ -10,7 +10,6 @@ import { runQuery } from './claude.js'
 import { handleCommand, getModelOverride } from './commands.js'
 import { chunkResponse, formatCost } from './formatter.js'
 import { createPermissionHandler } from './permissions.js'
-import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import type { ProjectRegistry } from './projects.js'
 import type { SessionStore } from './sessions.js'
 
@@ -38,29 +37,16 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
 
   client.on('ready', () => {
     console.log(`Logged in as ${client.user?.tag}`)
-    console.log(`In ${client.guilds.cache.size} server(s)`)
-    client.guilds.cache.forEach(guild => {
-      console.log(`  Server: ${guild.name} (${guild.id})`)
-      const channels = guild.channels.cache.filter(c => c.isTextBased())
-      console.log(`  Text channels: ${channels.map(c => `${c.name}:${c.id}`).join(', ')}`)
-    })
   })
 
   client.on('messageCreate', async (message: Message) => {
-    console.log(`[DEBUG] Message received in channel ${message.channelId}: "${message.content?.slice(0, 50)}"`)
-
     // Guards
     if (message.author.bot) return
     if (!message.content && message.attachments.size === 0) return
 
     // Project lookup
     const project = projects.getByChannelId(message.channelId)
-    if (!project) {
-      console.log(`[DEBUG] No project found for channel ${message.channelId}`)
-      return
-    }
-
-    console.log(`[DEBUG] Found project: ${project.name}, processing...`)
+    if (!project) return
 
     // Apply runtime model override if set
     const modelOverride = getModelOverride(message.channelId)
