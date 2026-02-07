@@ -151,32 +151,3 @@ Example `.claude/settings.json` with MCP:
 | `/rescan` | Re-scan for new projects |
 | `/model <name>` | Switch model (Sonnet/Opus/Haiku) |
 
-## Architecture
-
-```
-PROJECTS_ROOT/
-├── finance/
-│   ├── discord.json          ← Links to Discord channel
-│   ├── CLAUDE.md             ← Project memory
-│   └── .claude/settings.json ← MCP servers, permissions
-├── portfolio/
-│   ├── discord.json
-│   └── ...
-└── ...
-
-claude-discord-gateway/
-├── src/
-│   ├── index.ts      ← Entry point
-│   ├── discord.ts    ← Discord client
-│   ├── claude.ts     ← Agent SDK wrapper
-│   ├── projects.ts   ← Project discovery
-│   ├── sessions.ts   ← SQLite persistence
-│   ├── permissions.ts← Button approval
-│   ├── formatter.ts  ← Response chunking
-│   └── commands.ts   ← Slash commands
-└── data/sessions.db  ← Session storage
-```
-
-## License
-
-MIT
