@@ -7,7 +7,11 @@ import {
 import fs from "node:fs/promises"
 import path from "node:path"
 import { runQuery } from "./claude.js"
-import { handleCommand, getModelOverride } from "./commands.js"
+import {
+  handleCommand,
+  getModelOverride,
+  getPermissionModeOverride,
+} from "./commands.js"
 import { chunkResponse, formatCost } from "./formatter.js"
 import { createPermissionHandler } from "./permissions.js"
 import type { ProjectRegistry } from "./projects.js"
@@ -23,6 +27,9 @@ export const lastCosts = new Map<
   string,
   { cost: number; durationMs: number; numTurns: number }
 >()
+
+// Track active queries for /abort command
+export const activeQueries = new Map<string, AbortController>()
 
 export function createDiscordClient(opts: DiscordClientOptions): Client {
   const { projects, sessions } = opts
@@ -48,11 +55,16 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
     const project = projects.getByChannelId(message.channelId)
     if (!project) return
 
-    // Apply runtime model override if set
+    // Apply runtime overrides
     const modelOverride = getModelOverride(message.channelId)
-    const effectiveProject = modelOverride
-      ? { ...project, model: modelOverride }
-      : project
+    const permissionOverride = getPermissionModeOverride(message.channelId)
+    const effectiveProject = {
+      ...project,
+      ...(modelOverride && { model: modelOverride }),
+      ...(permissionOverride && {
+        permissionMode: permissionOverride as typeof project.permissionMode,
+      }),
+    }
 
     // Handle attachments
     const attachmentPaths: string[] = []
@@ -94,6 +106,8 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
     const canUseTool = createPermissionHandler(channel)
 
     const sessionId = sessions.get(message.channelId)
+    const abortController = new AbortController()
+    activeQueries.set(message.channelId, abortController)
 
     try {
       const result = await runQuery({
@@ -102,6 +116,7 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
         sessionId,
         canUseTool,
         attachments: attachmentPaths,
+        abortController,
       })
 
       // Save session
@@ -125,7 +140,9 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
       const costFooter = formatCost(
         result.cost,
         result.durationMs,
-        result.numTurns
+        result.numTurns,
+        result.inputTokens,
+        result.contextWindow
       )
 
       for (let i = 0; i < chunks.length; i++) {
@@ -147,6 +164,7 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
         await message.reply(`Error: ${err.message}`)
       }
     } finally {
+      activeQueries.delete(message.channelId)
       clearInterval(typingInterval)
     }
   })
@@ -158,6 +176,7 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
       projects,
       sessions,
       lastCosts,
+      activeQueries,
     })
   })
 

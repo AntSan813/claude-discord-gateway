@@ -105,16 +105,31 @@ function fixCodeBlockContinuity(chunks: string[]): string[] {
   return result
 }
 
+export function formatTokens(tokens: number): string {
+  if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}k`
+  return `${tokens}`
+}
+
 export function formatCost(
   cost: number,
   durationMs: number,
-  numTurns: number
+  numTurns: number,
+  inputTokens?: number,
+  contextWindow?: number
 ): string {
   const costStr = cost < 0.01 ? "<$0.01" : `$${cost.toFixed(3)}`
   const durationStr = (durationMs / 1000).toFixed(1)
-  return `-# ${costStr} · ${durationStr}s · ${numTurns} turn${
-    numTurns !== 1 ? "s" : ""
-  }`
+  const turnsStr = `${numTurns} turn${numTurns !== 1 ? "s" : ""}`
+
+  const parts = [costStr, `${durationStr}s`, turnsStr]
+
+  if (inputTokens && contextWindow) {
+    parts.push(
+      `${formatTokens(inputTokens)}/${formatTokens(contextWindow)} context`
+    )
+  }
+
+  return `-# ${parts.join(" · ")}`
 }
 
 export function truncate(text: string, maxLen: number): string {

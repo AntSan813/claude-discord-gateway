@@ -18,6 +18,8 @@ export interface QueryResult {
   numTurns: number
   isError: boolean
   errors?: string[]
+  inputTokens: number
+  contextWindow: number
 }
 
 export async function runQuery(input: QueryInput): Promise<QueryResult> {
@@ -73,6 +75,8 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
   let resultNumTurns = 0
   let resultIsError = false
   let resultErrors: string[] = []
+  let resultInputTokens = 0
+  let resultContextWindow = 0
 
   const q = query({ prompt: fullPrompt, options })
 
@@ -107,6 +111,13 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
       if (!resultText && "result" in message) {
         resultText = message.result
       }
+
+      // Capture token usage from the primary model
+      const models = Object.values(message.modelUsage)
+      if (models.length > 0) {
+        resultInputTokens = models.reduce((sum, m) => sum + m.inputTokens, 0)
+        resultContextWindow = models[0].contextWindow
+      }
     }
   }
 
@@ -118,5 +129,7 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
     numTurns: resultNumTurns,
     isError: resultIsError,
     errors: resultErrors.length > 0 ? resultErrors : undefined,
+    inputTokens: resultInputTokens,
+    contextWindow: resultContextWindow,
   }
 }

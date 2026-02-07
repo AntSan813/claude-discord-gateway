@@ -96,7 +96,7 @@ npm run start
 3. Create `discord.json` in your project folder:
 
 ```json
-{"channelId": "1234567890123456789"}
+{ "channelId": "1234567890123456789" }
 ```
 
 4. Run `/rescan` in Discord (or restart the bot)
@@ -108,17 +108,17 @@ npm run start
   "channelId": "1234567890123456789",
   "model": "claude-sonnet-4-5-20250929",
   "permissionMode": "acceptEdits",
-  "maxBudgetUsd": 5.00
+  "maxBudgetUsd": 5.0
 }
 ```
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `model` | SDK default | `claude-sonnet-4-5-20250929`, `claude-opus-4-6`, `claude-haiku-4-5-20251001` |
-| `permissionMode` | `default` | `default`, `acceptEdits`, `bypassPermissions`, `plan` |
-| `maxBudgetUsd` | unlimited | Cost cap per query |
-| `allowedTools` | all | Restrict to specific tools |
-| `disallowedTools` | none | Block specific tools |
+| Field             | Default     | Description                                                                  |
+| ----------------- | ----------- | ---------------------------------------------------------------------------- |
+| `model`           | SDK default | `claude-sonnet-4-5-20250929`, `claude-opus-4-6`, `claude-haiku-4-5-20251001` |
+| `permissionMode`  | `default`   | `default`, `acceptEdits`, `bypassPermissions`, `plan`                        |
+| `maxBudgetUsd`    | unlimited   | Cost cap per query                                                           |
+| `allowedTools`    | all         | Restrict to specific tools                                                   |
+| `disallowedTools` | none        | Block specific tools                                                         |
 
 ## Project Configuration
 
@@ -134,7 +134,11 @@ Example `.claude/settings.json` with MCP:
   "mcpServers": {
     "postgres": {
       "command": "npx",
-      "args": ["-y", "@anthropic-ai/mcp-server-postgres", "postgresql://localhost:5432/mydb"]
+      "args": [
+        "-y",
+        "@anthropic-ai/mcp-server-postgres",
+        "postgresql://localhost:5432/mydb"
+      ]
     }
   }
 }
@@ -142,12 +146,28 @@ Example `.claude/settings.json` with MCP:
 
 ## Slash Commands
 
-| Command | Description |
-|---------|-------------|
-| `/new` | Clear session, start fresh conversation |
-| `/status` | Show project info and session state |
-| `/cost` | Show cost of last query |
-| `/projects` | List all registered projects |
-| `/rescan` | Re-scan for new projects |
-| `/model <name>` | Switch model (Sonnet/Opus/Haiku) |
+| Command                   | Description                                                |
+| ------------------------- | ---------------------------------------------------------- |
+| `/new [save_as]`          | Start fresh. Optionally save current session with a label. |
+| `/resume [label]`         | List saved sessions, or resume one by label.               |
+| `/status`                 | Show project and session info.                             |
+| `/cost`                   | Show cost of last query.                                   |
+| `/config`                 | Show full project config and active overrides.             |
+| `/model <name>`           | Switch model (Sonnet/Opus/Haiku).                          |
+| `/permission-mode <mode>` | Switch permission mode for this channel.                   |
+| `/abort`                  | Cancel the running query.                                  |
+| `/projects`               | List all registered projects.                              |
+| `/rescan`                 | Re-scan for new projects.                                  |
+| `/help`                   | List all commands.                                         |
 
+### Named Sessions
+
+Save and switch between conversations within the same channel:
+
+```
+/new save_as:auth-bug     → saves current session as "auth-bug", starts fresh
+/resume                   → lists all saved sessions
+/resume label:auth-bug    → switches back to "auth-bug" conversation
+```
+
+Each response includes context window usage in the footer (e.g., `42k/200k context`) so you can see how much of the model's context is being used.
