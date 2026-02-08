@@ -8,6 +8,7 @@ export interface QueryInput {
   canUseTool: CanUseTool
   attachments?: string[]
   abortController?: AbortController
+  onToolActivity?: (text: string) => void
 }
 
 export interface QueryResult {
@@ -30,6 +31,7 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
     canUseTool,
     attachments,
     abortController,
+    onToolActivity,
   } = input
 
   // Build prompt with attachments if any
@@ -86,16 +88,27 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
       resultSessionId = message.session_id
     }
 
-    // Collect assistant text
+    // Collect assistant text and tool invocations
     if (message.type === "assistant" && message.message?.content) {
       for (const block of message.message.content) {
         if ("text" in block && typeof block.text === "string") {
           resultText += block.text
         }
+        if (block.type === "tool_use" && onToolActivity) {
+          onToolActivity(
+            formatToolUse(block.name, block.input as Record<string, unknown>)
+          )
+        }
       }
     }
 
-    // Capture result
+    // Forward tool use summaries
+    if (message.type === "tool_use_summary" && onToolActivity) {
+      onToolActivity(message.summary)
+    }
+
+    // Capture result and close — prevents spurious exit code 1
+    // when Discord.js WebSocket is active in the parent process
     if (message.type === "result") {
       resultSessionId = message.session_id
       resultCost = message.total_cost_usd
@@ -118,6 +131,9 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
         resultInputTokens = models.reduce((sum, m) => sum + m.inputTokens, 0)
         resultContextWindow = models[0].contextWindow
       }
+
+      q.close()
+      break
     }
   }
 
@@ -132,4 +148,16 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
     inputTokens: resultInputTokens,
     contextWindow: resultContextWindow,
   }
+}
+
+function formatToolUse(name: string, input: Record<string, unknown>): string {
+  // Show the most relevant argument as a brief hint
+  const hint =
+    (input.command as string) ??
+    (input.file_path as string) ??
+    (input.path as string) ??
+    (input.pattern as string) ??
+    ""
+  const short = hint.length > 80 ? hint.slice(0, 77) + "..." : hint
+  return short ? `⏵ ${name}: ${short}` : `⏵ ${name}`
 }

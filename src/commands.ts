@@ -130,6 +130,13 @@ export async function handleCommand(
 
   switch (commandName) {
     case "new": {
+      // Abort any running query
+      const controller = ctx.activeQueries.get(interaction.channelId)
+      if (controller) {
+        controller.abort()
+        ctx.activeQueries.delete(interaction.channelId)
+      }
+
       const label = interaction.options.getString("save_as")
 
       if (label) {

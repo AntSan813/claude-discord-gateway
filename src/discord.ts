@@ -55,6 +55,9 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
     const project = projects.getByChannelId(message.channelId)
     if (!project) return
 
+    // Skip if a query is already running for this channel
+    if (activeQueries.has(message.channelId)) return
+
     // Apply runtime overrides
     const modelOverride = getModelOverride(message.channelId)
     const permissionOverride = getPermissionModeOverride(message.channelId)
@@ -109,6 +112,12 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
     const abortController = new AbortController()
     activeQueries.set(message.channelId, abortController)
 
+    console.log(
+      `Query [${project.name}] session=${
+        sessionId?.slice(0, 8) ?? "new"
+      } prompt="${prompt.slice(0, 60)}"`
+    )
+
     try {
       const result = await runQuery({
         prompt,
@@ -117,6 +126,9 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
         canUseTool,
         attachments: attachmentPaths,
         abortController,
+        onToolActivity: text => {
+          channel.send(`-# ${text}`).catch(() => {})
+        },
       })
 
       // Save session
@@ -152,15 +164,20 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
       }
     } catch (error) {
       const err = error as Error
+      console.error(
+        `Query error [${project.name}] session=${sessionId ?? "none"} path=${
+          project.path
+        }:`,
+        err.message
+      )
+      if (err.stack) console.error(err.stack)
 
-      // Handle session resume failure
-      if (isSessionError(err, sessionId !== null)) {
+      if (sessionId && isSessionError(err)) {
         sessions.clear(message.channelId)
         await message.reply(
           "Session expired or corrupted. Starting fresh — please resend your message."
         )
       } else {
-        console.error("Query error:", err)
         await message.reply(`Error: ${err.message}`)
       }
     } finally {
@@ -172,34 +189,28 @@ export function createDiscordClient(opts: DiscordClientOptions): Client {
   client.on("interactionCreate", async interaction => {
     if (!interaction.isChatInputCommand()) return
 
-    await handleCommand(interaction, {
-      projects,
-      sessions,
-      lastCosts,
-      activeQueries,
-    })
+    try {
+      await handleCommand(interaction, {
+        projects,
+        sessions,
+        lastCosts,
+        activeQueries,
+      })
+    } catch (err) {
+      console.error("Command error:", err)
+    }
   })
 
   return client
 }
 
-function isSessionError(error: Error, hadSession: boolean): boolean {
+function isSessionError(error: Error): boolean {
   const msg = error.message.toLowerCase()
-
-  // Explicit session-related errors
-  if (
+  return (
     msg.includes("session") ||
     msg.includes("resume") ||
     msg.includes("not found") ||
-    msg.includes("expired")
-  ) {
-    return true
-  }
-
-  // Process crash while resuming a session — likely a stale/corrupt session
-  if (hadSession && msg.includes("exited with code")) {
-    return true
-  }
-
-  return false
+    msg.includes("expired") ||
+    msg.includes("exited with code")
+  )
 }
