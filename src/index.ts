@@ -1,4 +1,6 @@
 import "dotenv/config"
+import os from "node:os"
+import path from "node:path"
 import { createDiscordClient } from "./discord.js"
 import { ProjectRegistry } from "./projects.js"
 import { SessionStore } from "./sessions.js"
@@ -16,19 +18,20 @@ function requireEnv(name: string): string {
 
 const DISCORD_TOKEN = requireEnv("DISCORD_TOKEN")
 const DISCORD_APPLICATION_ID = requireEnv("DISCORD_APPLICATION_ID")
-const PROJECTS_ROOT = requireEnv("PROJECTS_ROOT")
 requireEnv("ANTHROPIC_API_KEY") // Just validate it exists, SDK reads it directly
 
 async function main(): Promise<void> {
   console.log("Starting Discord Claude Bridge...")
 
   // Discover projects
-  const projects = new ProjectRegistry(PROJECTS_ROOT)
+  const projectsRoot =
+    process.env.PROJECTS_DIR || path.join(os.homedir(), "projects")
+  const projects = new ProjectRegistry(projectsRoot)
   projects.discover()
 
   if (projects.count() === 0) {
     console.warn(
-      "No projects with discord.json found. Add projects and run /rescan."
+      "No projects found. Use 'make add-project CHANNEL_ID=xxx' to add one."
     )
   }
 

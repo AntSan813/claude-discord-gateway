@@ -3,11 +3,11 @@
 **Chat with Claude Code through Discord. One channel = one project. That's it.**
 
 ```
-Discord #finance channel  →  ~/projects/finance/
-Discord #portfolio channel  →  ~/projects/portfolio/
+Discord #finance channel  →  local ~/projects/finance/
+Discord #portfolio channel  →  local ~/projects/portfolio/
 ```
 
-No complex setup. No unnecessary features. Just add a `discord.json` to any folder and start chatting.
+One command to add a project. One command to start the bot. That's it.
 
 ## Why This Exists
 
@@ -67,41 +67,44 @@ Edit `.env`:
 DISCORD_TOKEN=your_bot_token
 DISCORD_APPLICATION_ID=your_application_id
 ANTHROPIC_API_KEY=your_anthropic_key
-PROJECTS_ROOT=/path/to/your/projects
 ```
 
-### 4. Link a project to a channel
+### 4. Add a project
 
-Create a `discord.json` in any project folder:
+Get your channel ID (right-click channel in Discord → Copy Channel ID), then:
 
 ```bash
-# Get the channel ID: right-click channel in Discord → Copy Channel ID
-echo '{"channelId": "YOUR_CHANNEL_ID"}' > /path/to/your/project/discord.json
+make add-project CHANNEL_ID=1234567890
+# Enter project name: finance
+# Link to existing directory? (leave empty to create new): /path/to/my/finance-project
 ```
+
+This creates `~/projects/finance/` (symlink or folder) with a `discord.json` file.
 
 ### 5. Run the bot
 
 ```bash
-# Development (auto-reload)
-npm run dev
+# Background mode (recommended)
+make start
 
-# Production
-npm run start
+# View logs
+make logs
+
+# Stop
+make stop
 ```
 
 ## Adding More Channels
 
-1. Create a new text channel in Discord
-2. Copy the channel ID (right-click → Copy Channel ID)
-3. Create `discord.json` in your project folder:
-
-```json
-{ "channelId": "1234567890123456789" }
+```bash
+make add-project CHANNEL_ID=your_channel_id
+# Follow the prompts
+make restart
 ```
 
-4. Run `/rescan` in Discord (or restart the bot)
+### Optional: Customize Project Config
 
-### Optional Configuration
+Edit `~/projects/your-project/discord.json`:
 
 ```json
 {
@@ -156,8 +159,8 @@ Example `.claude/settings.json` with MCP:
 | `/model <name>`           | Switch model (Sonnet/Opus/Haiku).                          |
 | `/permission-mode <mode>` | Switch permission mode for this channel.                   |
 | `/abort`                  | Cancel the running query.                                  |
-| `/projects`               | List all registered projects.                              |
-| `/rescan`                 | Re-scan for new projects.                                  |
+| `//projects`              | List all registered /projects.                             |
+| `/rescan`                 | Re-scan for new /projects.                                 |
 | `/help`                   | List all commands.                                         |
 
 ### Named Sessions

@@ -40,6 +40,7 @@ export class ProjectRegistry {
     const entries = fs.readdirSync(this.projectsRoot, { withFileTypes: true })
 
     for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue
       if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
 
       const projectPath = fs.realpathSync(
