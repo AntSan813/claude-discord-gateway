@@ -49,7 +49,7 @@ add-project:
 		echo "Created directory: $(PROJECTS_DIR)/$$name"; \
 	fi; \
 	target="$(PROJECTS_DIR)/$$name"; \
-	cp -rn $(PROJECTS_DIR)/.template/. "$$target/"; \
+	cp -rn project-template/. "$$target/"; \
 	sed -i "s/{{PROJECT_NAME}}/$$name/g; s/{{CHANNEL_ID}}/$(CHANNEL_ID)/g" "$$target/discord.json" "$$target/CLAUDE.md"; \
 	echo ""; \
 	echo "Project '$$name' is ready! Scaffolded files:"; \
