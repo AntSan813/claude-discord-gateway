@@ -114,7 +114,7 @@ export function formatCost(
   cost: number,
   durationMs: number,
   numTurns: number,
-  inputTokens?: number,
+  contextUsed?: number,
   contextWindow?: number
 ): string {
   const costStr = cost < 0.01 ? "<$0.01" : `$${cost.toFixed(3)}`
@@ -123,9 +123,9 @@ export function formatCost(
 
   const parts = [costStr, `${durationStr}s`, turnsStr]
 
-  if (inputTokens && contextWindow) {
+  if (contextUsed && contextWindow) {
     parts.push(
-      `${formatTokens(inputTokens)}/${formatTokens(contextWindow)} context`
+      `${formatTokens(contextUsed)}/${formatTokens(contextWindow)} context`
     )
   }
 

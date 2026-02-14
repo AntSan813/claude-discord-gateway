@@ -23,11 +23,13 @@ No test suite or linter is configured.
 
 ## Architecture
 
-**Entry flow:** `index.ts` → validates env vars, discovers projects, initializes SQLite session store, registers Discord slash commands, creates Discord client.
+**Entry flow:** `index.ts` → validates env vars, discovers projects, initializes SQLite session store, discovers Claude Code capabilities (commands/models via `discovery.ts`), registers Discord slash commands, creates Discord client.
 
-**Core loop** (`discord.ts`): On every `messageCreate`, looks up the channel in `ProjectRegistry`. If matched, downloads any attachments to `<project>/.discord-uploads/`, then calls `runQuery()` with the prompt. Only one query runs per channel at a time (`activeQueries` map). Responses are chunked to fit Discord's 2000-char limit with code block continuity handling (`formatter.ts`).
+**Core loop** (`discord.ts`): On every `messageCreate`, looks up the channel in `ProjectRegistry`. If matched, downloads any attachments to `<project>/.discord-uploads/`, then calls `runQuery()` with the prompt. One query runs per channel at a time — additional messages are queued with a clock reaction and processed sequentially. Responses stream to Discord via message editing (throttled to ~1.5s), then finalize into chunked messages with code block continuity handling (`formatter.ts`).
 
-**Claude integration** (`claude.ts`): Wraps `@anthropic-ai/claude-agent-sdk`'s `query()` function. Streams messages, collecting text from `assistant` events and metadata from the `result` event. Calls `q.close()` after receiving the result to avoid exit code issues when Discord.js WebSocket is active. The SDK reads `ANTHROPIC_API_KEY` from env directly.
+**Claude integration** (`claude.ts`): Wraps `@anthropic-ai/claude-agent-sdk`'s `query()` function with `includePartialMessages: true` for streaming. Emits callbacks for streaming text, tool activity, and status changes. Captures per-turn usage from assistant messages for accurate context window fill. Exposes the `Query` object via callback for graceful interrupt.
+
+**Capability discovery** (`discovery.ts`): On startup, runs a lightweight query (plan mode, 1 turn) to discover available Claude Code slash commands and models via `supportedCommands()` and `supportedModels()`.
 
 **Project registry** (`projects.ts`): Scans `PROJECTS_DIR` (defaults to `~/projects`) for directories (or symlinks to directories) containing a `discord.json` file. Maps `channelId → ProjectConfig`. Each project can override model, permission mode, budget, and tool restrictions.
 
@@ -35,7 +37,7 @@ No test suite or linter is configured.
 
 **Permission handling** (`permissions.ts`): Implements `CanUseTool` callback from the Agent SDK. Sends Discord embeds with Approve/Deny buttons (10-min timeout). Special handling for `AskUserQuestion` tool — renders options as clickable buttons and returns the selected answer.
 
-**Slash commands** (`commands.ts`): Model and permission-mode overrides are stored in-memory maps (not persisted across restarts). Commands are registered globally via Discord REST API on every startup.
+**Slash commands** (`commands.ts`): Gateway commands (new, resume, status, etc.) plus dynamically discovered Claude Code commands (compact, init, memory, etc.). CC commands are passed through as prompt text. Model choices come from SDK discovery. Runtime overrides are ephemeral (in-memory, reset on restart by design).
 
 ## Key Patterns
 

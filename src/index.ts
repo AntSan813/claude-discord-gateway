@@ -4,7 +4,8 @@ import path from "node:path"
 import { createDiscordClient } from "./discord.js"
 import { ProjectRegistry } from "./projects.js"
 import { SessionStore } from "./sessions.js"
-import { registerCommands } from "./commands.js"
+import { registerCommands, setDiscoveredCapabilities } from "./commands.js"
+import { discoverCapabilities } from "./discovery.js"
 
 // Validate environment
 function requireEnv(name: string): string {
@@ -38,6 +39,20 @@ async function main(): Promise<void> {
   // Initialize session store
   const sessions = new SessionStore("./data/sessions.db")
 
+  // Discover Claude Code capabilities (commands, models)
+  const firstProject = projects.getAll()[0]
+  if (firstProject) {
+    try {
+      const capabilities = await discoverCapabilities(firstProject.path)
+      setDiscoveredCapabilities(capabilities.commands, capabilities.models)
+      console.log(
+        `Discovered ${capabilities.commands.length} commands, ${capabilities.models.length} models`
+      )
+    } catch (err) {
+      console.warn("Could not discover Claude Code capabilities:", err)
+    }
+  }
+
   // Register slash commands
   await registerCommands(DISCORD_TOKEN, DISCORD_APPLICATION_ID)
 
@@ -45,19 +60,14 @@ async function main(): Promise<void> {
   const client = createDiscordClient({ projects, sessions })
 
   // Handle graceful shutdown
-  process.on("SIGINT", () => {
+  const shutdown = () => {
     console.log("\nShutting down...")
     sessions.close()
     client.destroy()
     process.exit(0)
-  })
-
-  process.on("SIGTERM", () => {
-    console.log("\nShutting down...")
-    sessions.close()
-    client.destroy()
-    process.exit(0)
-  })
+  }
+  process.on("SIGINT", shutdown)
+  process.on("SIGTERM", shutdown)
 
   // Handle unhandled rejections (don't crash)
   process.on("unhandledRejection", error => {

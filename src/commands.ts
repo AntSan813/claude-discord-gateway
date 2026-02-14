@@ -4,10 +4,12 @@ import {
   REST,
   Routes,
 } from "discord.js"
+import type { SlashCommand, ModelInfo } from "@anthropic-ai/claude-agent-sdk"
 import type { ProjectRegistry } from "./projects.js"
 import type { SessionStore } from "./sessions.js"
+import { truncate } from "./formatter.js"
 
-// Runtime overrides (not persisted across restarts)
+// Runtime overrides (ephemeral — reset on restart, by design)
 const modelOverrides = new Map<string, string>()
 const permissionModeOverrides = new Map<string, string>()
 
@@ -21,84 +23,141 @@ export function getPermissionModeOverride(
   return permissionModeOverrides.get(channelId)
 }
 
-const commands = [
-  new SlashCommandBuilder()
-    .setName("new")
-    .setDescription(
-      "Start a fresh conversation (optionally save current with a label)"
-    )
-    .addStringOption(opt =>
-      opt
-        .setName("save_as")
-        .setDescription("Save current session with this label before clearing")
-    ),
+// Gateway-owned command names (take precedence over Claude Code commands)
+const GATEWAY_COMMAND_NAMES = new Set([
+  "new",
+  "resume",
+  "status",
+  "cost",
+  "config",
+  "projects",
+  "rescan",
+  "model",
+  "permission-mode",
+  "abort",
+  "help",
+])
 
-  new SlashCommandBuilder()
-    .setName("resume")
-    .setDescription("List saved sessions or resume one by label")
-    .addStringOption(opt =>
-      opt.setName("label").setDescription("Label of the session to resume")
-    ),
+// Discovered Claude Code commands (populated on startup)
+let discoveredCommands: SlashCommand[] = []
+let discoveredModels: ModelInfo[] = []
 
-  new SlashCommandBuilder()
-    .setName("status")
-    .setDescription("Show project and session info"),
+export function setDiscoveredCapabilities(
+  commands: SlashCommand[],
+  models: ModelInfo[]
+): void {
+  discoveredCommands = commands
+  discoveredModels = models
+}
 
-  new SlashCommandBuilder()
-    .setName("cost")
-    .setDescription("Show session cost (from last response)"),
-
-  new SlashCommandBuilder()
-    .setName("config")
-    .setDescription("Show full project configuration and active overrides"),
-
-  new SlashCommandBuilder()
-    .setName("projects")
-    .setDescription("List all registered projects"),
-
-  new SlashCommandBuilder()
-    .setName("rescan")
-    .setDescription("Re-scan project folders"),
-
-  new SlashCommandBuilder()
-    .setName("model")
-    .setDescription("Switch Claude model for this channel")
-    .addStringOption(opt =>
-      opt
-        .setName("name")
-        .setDescription("Model to use")
-        .setRequired(true)
-        .addChoices(
+function buildGatewayCommands() {
+  // Build model choices from discovered models, falling back to defaults
+  const modelChoices =
+    discoveredModels.length > 0
+      ? discoveredModels
+          .slice(0, 25) // Discord limit
+          .map(m => ({ name: m.displayName, value: m.value }))
+      : [
           { name: "Sonnet", value: "claude-sonnet-4-5-20250929" },
           { name: "Opus", value: "claude-opus-4-6" },
-          { name: "Haiku", value: "claude-haiku-4-5-20251001" }
+          { name: "Haiku", value: "claude-haiku-4-5-20251001" },
+        ]
+
+  return [
+    new SlashCommandBuilder()
+      .setName("new")
+      .setDescription("Start a fresh conversation (optionally save current)")
+      .addStringOption(opt =>
+        opt
+          .setName("save_as")
+          .setDescription(
+            "Save current session with this label before clearing"
+          )
+      ),
+
+    new SlashCommandBuilder()
+      .setName("resume")
+      .setDescription("List saved sessions or resume one by label")
+      .addStringOption(opt =>
+        opt.setName("label").setDescription("Label of the session to resume")
+      ),
+
+    new SlashCommandBuilder()
+      .setName("status")
+      .setDescription("Show project and session info"),
+
+    new SlashCommandBuilder()
+      .setName("cost")
+      .setDescription("Show session cost (from last response)"),
+
+    new SlashCommandBuilder()
+      .setName("config")
+      .setDescription("Show full project configuration and active overrides"),
+
+    new SlashCommandBuilder()
+      .setName("projects")
+      .setDescription("List all registered projects"),
+
+    new SlashCommandBuilder()
+      .setName("rescan")
+      .setDescription("Re-scan project folders"),
+
+    new SlashCommandBuilder()
+      .setName("model")
+      .setDescription("Switch Claude model for this channel")
+      .addStringOption(opt =>
+        opt
+          .setName("name")
+          .setDescription("Model to use")
+          .setRequired(true)
+          .addChoices(...modelChoices)
+      ),
+
+    new SlashCommandBuilder()
+      .setName("permission-mode")
+      .setDescription("Switch permission mode for this channel")
+      .addStringOption(opt =>
+        opt
+          .setName("mode")
+          .setDescription("Permission mode")
+          .setRequired(true)
+          .addChoices(
+            { name: "Default", value: "default" },
+            { name: "Accept Edits", value: "acceptEdits" },
+            { name: "Bypass Permissions", value: "bypassPermissions" },
+            { name: "Plan Only", value: "plan" }
+          )
+      ),
+
+    new SlashCommandBuilder()
+      .setName("abort")
+      .setDescription("Cancel the currently running query"),
+
+    new SlashCommandBuilder()
+      .setName("help")
+      .setDescription("List all available commands"),
+  ]
+}
+
+function buildClaudeCodeCommands() {
+  return discoveredCommands
+    .filter(cmd => !GATEWAY_COMMAND_NAMES.has(cmd.name))
+    .map(cmd => {
+      const builder = new SlashCommandBuilder()
+        .setName(cmd.name)
+        .setDescription(
+          truncate(cmd.description || `Claude Code: /${cmd.name}`, 100)
         )
-    ),
 
-  new SlashCommandBuilder()
-    .setName("permission-mode")
-    .setDescription("Switch permission mode for this channel")
-    .addStringOption(opt =>
-      opt
-        .setName("mode")
-        .setDescription("Permission mode")
-        .setRequired(true)
-        .addChoices(
-          { name: "Default", value: "default" },
-          { name: "Accept Edits", value: "acceptEdits" },
-          { name: "Bypass Permissions", value: "bypassPermissions" },
-          { name: "Plan Only", value: "plan" }
+      if (cmd.argumentHint) {
+        builder.addStringOption(opt =>
+          opt.setName("args").setDescription(cmd.argumentHint)
         )
-    ),
+      }
 
-  new SlashCommandBuilder()
-    .setName("abort")
-    .setDescription("Cancel the currently running query"),
-
-  new SlashCommandBuilder()
-    .setName("help")
-    .setDescription("List all available commands"),
-]
+      return builder
+    })
+}
 
 export async function registerCommands(
   token: string,
@@ -106,20 +165,27 @@ export async function registerCommands(
 ): Promise<void> {
   const rest = new REST().setToken(token)
 
-  console.log("Registering slash commands...")
+  const gatewayCommands = buildGatewayCommands()
+  const ccCommands = buildClaudeCodeCommands()
+  const allCommands = [...gatewayCommands, ...ccCommands]
+
+  console.log(
+    `Registering ${gatewayCommands.length} gateway + ${ccCommands.length} Claude Code commands...`
+  )
 
   await rest.put(Routes.applicationCommands(applicationId), {
-    body: commands.map(c => c.toJSON()),
+    body: allCommands.map(c => c.toJSON()),
   })
 
   console.log("Slash commands registered.")
 }
 
-interface CommandContext {
+export interface CommandContext {
   projects: ProjectRegistry
   sessions: SessionStore
   lastCosts: Map<string, { cost: number; durationMs: number; numTurns: number }>
-  activeQueries: Map<string, AbortController>
+  activeQueries: Map<string, { interrupt: () => Promise<void> }>
+  sendAsPrompt: (channelId: string, prompt: string) => void
 }
 
 export async function handleCommand(
@@ -128,12 +194,24 @@ export async function handleCommand(
 ): Promise<void> {
   const { commandName } = interaction
 
+  // Check if this is a Claude Code command (passthrough)
+  const isCCCommand =
+    !GATEWAY_COMMAND_NAMES.has(commandName) &&
+    discoveredCommands.some(c => c.name === commandName)
+
+  if (isCCCommand) {
+    const args = interaction.options.getString("args") ?? ""
+    const prompt = args ? `/${commandName} ${args}` : `/${commandName}`
+    await interaction.reply(`Running \`${prompt}\`...`)
+    ctx.sendAsPrompt(interaction.channelId, prompt)
+    return
+  }
+
   switch (commandName) {
     case "new": {
-      // Abort any running query
       const controller = ctx.activeQueries.get(interaction.channelId)
       if (controller) {
-        controller.abort()
+        await controller.interrupt()
         ctx.activeQueries.delete(interaction.channelId)
       }
 
@@ -279,11 +357,9 @@ export async function handleCommand(
       const model = interaction.options.getString("name", true)
       modelOverrides.set(interaction.channelId, model)
 
-      const displayName = model.includes("sonnet")
-        ? "Sonnet"
-        : model.includes("opus")
-        ? "Opus"
-        : "Haiku"
+      // Find display name from discovered models
+      const displayName =
+        discoveredModels.find(m => m.value === model)?.displayName ?? model
 
       await interaction.reply(
         `Model switched to **${displayName}** for this channel.`
@@ -301,34 +377,42 @@ export async function handleCommand(
     }
 
     case "abort": {
-      const controller = ctx.activeQueries.get(interaction.channelId)
-      if (!controller) {
+      const activeQuery = ctx.activeQueries.get(interaction.channelId)
+      if (!activeQuery) {
         await interaction.reply("No query is running in this channel.")
         return
       }
-      controller.abort()
+      await activeQuery.interrupt()
       ctx.activeQueries.delete(interaction.channelId)
-      await interaction.reply("Query aborted.")
+      await interaction.reply("Query interrupted.")
       break
     }
 
     case "help": {
-      const helpText = [
-        "**Claude Discord Gateway — Commands**",
-        "",
-        "`/new [save_as]` — Start fresh. Optionally save current session with a label.",
+      const gatewayHelp = [
+        "**Gateway Commands**",
+        "`/new [save_as]` — Start fresh. Optionally save current session.",
         "`/resume [label]` — List saved sessions, or resume one by label.",
         "`/status` — Show project and session info.",
         "`/cost` — Show cost of last query.",
         "`/config` — Show full project config and active overrides.",
-        "`/model <name>` — Switch model (Sonnet/Opus/Haiku).",
+        "`/model <name>` — Switch model.",
         "`/permission-mode <mode>` — Switch permission mode.",
-        "`/abort` — Cancel the running query.",
+        "`/abort` — Interrupt the running query.",
         "`/projects` — List all registered projects.",
         "`/rescan` — Re-scan for new projects.",
-        "`/help` — Show this message.",
       ]
-      await interaction.reply(helpText.join("\n"))
+
+      const ccHelp = discoveredCommands
+        .filter(c => !GATEWAY_COMMAND_NAMES.has(c.name))
+        .map(c => `\`/${c.name}\` — ${c.description}`)
+
+      const sections = [...gatewayHelp]
+      if (ccHelp.length > 0) {
+        sections.push("", "**Claude Code Commands**", ...ccHelp)
+      }
+
+      await interaction.reply(sections.join("\n"))
       break
     }
 

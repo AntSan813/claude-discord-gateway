@@ -1,5 +1,11 @@
-import { query, type CanUseTool } from "@anthropic-ai/claude-agent-sdk"
+import {
+  query,
+  type CanUseTool,
+  type Query,
+} from "@anthropic-ai/claude-agent-sdk"
 import type { ProjectConfig } from "./projects.js"
+
+export type { Query }
 
 export interface QueryInput {
   prompt: string
@@ -7,8 +13,9 @@ export interface QueryInput {
   sessionId: string | null
   canUseTool: CanUseTool
   attachments?: string[]
-  abortController?: AbortController
+  onStreamText?: (text: string) => void
   onToolActivity?: (text: string) => void
+  onQueryCreated?: (q: Query) => void
 }
 
 export interface QueryResult {
@@ -19,7 +26,7 @@ export interface QueryResult {
   numTurns: number
   isError: boolean
   errors?: string[]
-  inputTokens: number
+  contextUsed: number
   contextWindow: number
 }
 
@@ -30,8 +37,9 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
     sessionId,
     canUseTool,
     attachments,
-    abortController,
+    onStreamText,
     onToolActivity,
+    onQueryCreated,
   } = input
 
   // Build prompt with attachments if any
@@ -42,32 +50,20 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
   }
 
   const options: Parameters<typeof query>[0]["options"] = {
-    // Core: Project scoping
     cwd: project.path,
-
-    // Core: Load native Claude Code config
     settingSources: ["project", "user"],
-
-    // Core: Use Claude Code's full system prompt
     systemPrompt: { type: "preset", preset: "claude_code" },
-
-    // Core: Permission handling
     permissionMode: project.permissionMode,
     canUseTool: canUseTool,
+    includePartialMessages: true,
 
-    // Session: Resume or start fresh
     ...(sessionId && { resume: sessionId }),
-
-    // Optional: Per-project overrides
     ...(project.model && { model: project.model }),
     ...(project.maxBudgetUsd && { maxBudgetUsd: project.maxBudgetUsd }),
     ...(project.allowedTools && { allowedTools: project.allowedTools }),
     ...(project.disallowedTools && {
       disallowedTools: project.disallowedTools,
     }),
-
-    // Abort controller for cancellation
-    ...(abortController && { abortController }),
   }
 
   let resultSessionId = sessionId ?? ""
@@ -77,18 +73,34 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
   let resultNumTurns = 0
   let resultIsError = false
   let resultErrors: string[] = []
-  let resultInputTokens = 0
+  let resultContextUsed = 0
   let resultContextWindow = 0
 
+  // Track streaming text separately from final result text
+  let streamText = ""
+
   const q = query({ prompt: fullPrompt, options })
+  onQueryCreated?.(q)
 
   for await (const message of q) {
-    // Capture session ID from init message
+    // Capture session ID from init
     if (message.type === "system" && message.subtype === "init") {
       resultSessionId = message.session_id
     }
 
-    // Collect assistant text and tool invocations
+    // Stream text deltas to caller
+    if (message.type === "stream_event") {
+      const event = message.event as Record<string, unknown>
+      if (event.type === "content_block_delta") {
+        const delta = event.delta as Record<string, unknown>
+        if (delta?.type === "text_delta" && typeof delta.text === "string") {
+          streamText += delta.text
+          onStreamText?.(streamText)
+        }
+      }
+    }
+
+    // Collect final text and track per-turn usage from assistant messages
     if (message.type === "assistant" && message.message?.content) {
       for (const block of message.message.content) {
         if ("text" in block && typeof block.text === "string") {
@@ -100,6 +112,15 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
           )
         }
       }
+
+      // Capture per-turn usage for accurate context fill
+      const usage = message.message.usage as Record<string, unknown> | undefined
+      if (usage) {
+        const inputTokens = (usage.input_tokens as number) ?? 0
+        const cacheRead = (usage.cache_read_input_tokens as number) ?? 0
+        const cacheCreation = (usage.cache_creation_input_tokens as number) ?? 0
+        resultContextUsed = inputTokens + cacheRead + cacheCreation
+      }
     }
 
     // Forward tool use summaries
@@ -107,8 +128,14 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
       onToolActivity(message.summary)
     }
 
-    // Capture result and close — prevents spurious exit code 1
-    // when Discord.js WebSocket is active in the parent process
+    // Forward status messages (compacting, etc.)
+    if (message.type === "system" && message.subtype === "status") {
+      const status = (message as Record<string, unknown>).status
+      if (status === "compacting")
+        onToolActivity?.("Compacting conversation...")
+    }
+
+    // Capture result and close
     if (message.type === "result") {
       resultSessionId = message.session_id
       resultCost = message.total_cost_usd
@@ -120,15 +147,13 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
         resultErrors = message.errors
       }
 
-      // Use result text if we didn't accumulate any
       if (!resultText && "result" in message) {
         resultText = message.result
       }
 
-      // Capture token usage from the primary model
+      // Get context window from model usage
       const models = Object.values(message.modelUsage)
       if (models.length > 0) {
-        resultInputTokens = models.reduce((sum, m) => sum + m.inputTokens, 0)
         resultContextWindow = models[0].contextWindow
       }
 
@@ -145,13 +170,12 @@ export async function runQuery(input: QueryInput): Promise<QueryResult> {
     numTurns: resultNumTurns,
     isError: resultIsError,
     errors: resultErrors.length > 0 ? resultErrors : undefined,
-    inputTokens: resultInputTokens,
+    contextUsed: resultContextUsed,
     contextWindow: resultContextWindow,
   }
 }
 
 function formatToolUse(name: string, input: Record<string, unknown>): string {
-  // Show the most relevant argument as a brief hint
   const hint =
     (input.command as string) ??
     (input.file_path as string) ??
@@ -159,5 +183,5 @@ function formatToolUse(name: string, input: Record<string, unknown>): string {
     (input.pattern as string) ??
     ""
   const short = hint.length > 80 ? hint.slice(0, 77) + "..." : hint
-  return short ? `⏵ ${name}: ${short}` : `⏵ ${name}`
+  return short ? `${name}: ${short}` : name
 }
